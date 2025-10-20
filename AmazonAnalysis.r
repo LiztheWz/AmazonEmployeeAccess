@@ -66,23 +66,71 @@ test_amazon <- vroom("test.csv")
 # PENALIZED LOGISTIC REGRESSION
 # ============================================================================
 
+# amazon_recipe <- recipe(ACTION ~ ., data = train_amazon) %>%
+#   step_mutate_at(all_numeric_predictors(), fn=factor) %>%
+#   step_other(all_nominal_predictors(), threshold = 0.001, other = "other") %>%
+#   #step_dummy(all_nominal_predictors()) %>%
+#   step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>%
+#   step_normalize(all_nominal_predictors())
+
+# pen_log_mod <- logistic_reg(mixture = tune(), penalty = tune()) %>%
+#   set_engine("glmnet")
+
+# amazon_workflow <- workflow() %>%
+#   add_recipe(amazon_recipe) %>%
+#   add_model(pen_log_mod)
+# 
+# tuning_grid <- grid_regular(penalty(),
+#                             mixture(),
+#                             levels = 5) # L^2 total tuning possibilities
+# 
+# folds <- vfold_cv(train_amazon, v = 3, repeats = 1)
+# 
+# CV_results <- amazon_workflow %>%
+#   tune_grid(resamples = folds,
+#             grid = tuning_grid,
+#             metrics = metric_set(roc_auc))
+# # roc_auc, f_meas, sens, recall, spec, precision, accuracy
+# 
+# bestTune <- CV_results %>% select_best(metric = "roc_auc")
+# 
+# final_wf <- amazon_workflow %>%
+#   finalize_workflow(bestTune) %>%
+#   fit(data = train_amazon)
+# 
+# amazon_predictions <- final_wf %>%
+#   predict(new_data = test_amazon, type = "prob") %>%
+#   bind_cols(test_amazon %>% select(id)) %>%
+#   select(id, .pred_1) %>%
+#   rename(action = .pred_1)
+# 
+# vroom_write(amazon_predictions, "pen_log_reg_predictions.csv", delim = ',') 
+
+
+
+
+# REGRESSION TREES
+# ============================================================================
 amazon_recipe <- recipe(ACTION ~ ., data = train_amazon) %>%
   step_mutate_at(all_numeric_predictors(), fn=factor) %>%
   step_other(all_nominal_predictors(), threshold = 0.001, other = "other") %>%
-  #step_dummy(all_nominal_predictors()) %>%
-  step_lencode_mixed(all_nominal_predictors(), outcome = vars(ACTION)) %>%
-  step_normalize(all_nominal_predictors())
+  step_dummy(all_nominal_predictors())
 
-pen_log_mod <- logistic_reg(mixture = tune(), penalty = tune()) %>%
-  set_engine("glmnet")
+
+rando_mod <- rand_forest(mtry = tune(),
+                              min_n = tune(),
+                              trees = 500) %>%
+  set_engine("ranger") %>% set_mode(mode = "classification")
 
 amazon_workflow <- workflow() %>%
   add_recipe(amazon_recipe) %>%
-  add_model(pen_log_mod)
+  add_model(rando_mod)
 
-tuning_grid <- grid_regular(penalty(),
-                            mixture(),
-                            levels = 5) # L^2 total tuning possibilities
+rf_params <- parameters(mtry(),
+                        min_n()) %>% finalize(train_amazon)
+
+tuning_grid <- grid_regular(rf_params,
+                            levels = 5) # L^2 total tuning possibilities 
 
 folds <- vfold_cv(train_amazon, v = 3, repeats = 1)
 
@@ -104,7 +152,5 @@ amazon_predictions <- final_wf %>%
   select(id, .pred_1) %>%
   rename(action = .pred_1)
 
-vroom_write(amazon_predictions, "pen_log_reg_predictions.csv", delim = ',') 
-
-
+vroom_write(amazon_predictions, "random_forest_predictions.csv", delim = ',') 
 
