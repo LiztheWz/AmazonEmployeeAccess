@@ -4,6 +4,7 @@ library(tidyverse)
 library(tidymodels)
 library(vroom)
 library(embed)
+library(discrim)
 
 
 train_amazon <- vroom("train.csv") %>%
@@ -162,70 +163,26 @@ test_amazon <- vroom("test.csv")
 # KNN
 # ============================================================================
 
-amazon_recipe <- recipe(ACTION ~ ., data = train_amazon) %>%
-  step_mutate_at(all_numeric_predictors(), fn=factor) %>%
-  step_other(all_nominal_predictors(), threshold = 0.001, other = "other") %>%
-  step_dummy(all_nominal_predictors()) %>%
-  step_normalize(all_nominal_predictors())
-
-
-knn_model <- nearest_neighbor(neighbors = tune()) %>%
-  set_mode("classification") %>%
-  set_engine("kknn")
-
-amazon_workflow <- workflow() %>%
-  add_recipe(amazon_recipe) %>%
-  add_model(knn_model)
-
-
-tuning_grid <- grid_regular(neighbors(),
-                            levels = 2) # L^2 total tuning possibilities 
-
-folds <- vfold_cv(train_amazon, v = 3, repeats = 1)
-
-CV_results <- amazon_workflow %>%
-  tune_grid(resamples = folds,
-            grid = tuning_grid,
-            metrics = metric_set(roc_auc))
-# roc_auc, f_meas, sens, recall, spec, precision, accuracy
-
-bestTune <- CV_results %>% select_best(metric = "roc_auc")
-
-final_wf <- amazon_workflow %>%
-  finalize_workflow(bestTune) %>%
-  fit(data = train_amazon)
-
-amazon_predictions <- final_wf %>%
-  predict(new_data = test_amazon, type = "prob") %>%
-  bind_cols(test_amazon %>% select(id)) %>%
-  select(id, .pred_1) %>%
-  rename(action = .pred_1)
-
-vroom_write(amazon_predictions, "random_forest_predictions.csv", delim = ',') 
-
-
-# NAIVE BAYES
-# ============================================================================
 # amazon_recipe <- recipe(ACTION ~ ., data = train_amazon) %>%
 #   step_mutate_at(all_numeric_predictors(), fn=factor) %>%
 #   step_other(all_nominal_predictors(), threshold = 0.001, other = "other") %>%
 #   step_dummy(all_nominal_predictors()) %>%
 #   step_normalize(all_nominal_predictors())
 # 
-# nb_model <- naive_bayes(Laplace = tune(),
-#                         smoothness = tune()) %>%
+# 
+# knn_model <- nearest_neighbor(neighbors = tune()) %>%
 #   set_mode("classification") %>%
-#   set_engine("naivebayes")
+#   set_engine("kknn")
 # 
 # amazon_workflow <- workflow() %>%
 #   add_recipe(amazon_recipe) %>%
-#   add_model(nb_model)
+#   add_model(knn_model)
 # 
-# tuning_grid <- grid_regular(Laplace(),
-#                             smoothness(),
+# 
+# tuning_grid <- grid_regular(neighbors(),
 #                             levels = 2) # L^2 total tuning possibilities 
 # 
-# folds <- vfold_cv(train_amazon, v = 2, repeats = 1)
+# folds <- vfold_cv(train_amazon, v = 3, repeats = 1)
 # 
 # CV_results <- amazon_workflow %>%
 #   tune_grid(resamples = folds,
@@ -245,5 +202,51 @@ vroom_write(amazon_predictions, "random_forest_predictions.csv", delim = ',')
 #   select(id, .pred_1) %>%
 #   rename(action = .pred_1)
 # 
-# vroom_write(amazon_predictions, "naive_bayes_predictions.csv", delim = ',') 
+# vroom_write(amazon_predictions, "random_forest_predictions.csv", delim = ',') 
+
+
+# NAIVE BAYES
+# ============================================================================
+amazon_recipe <- recipe(ACTION ~ ., data = train_amazon) %>%
+  step_mutate_at(all_numeric_predictors(), fn=factor) %>%
+  step_other(all_nominal_predictors(), threshold = 0.001, other = "other") %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_normalize(all_nominal_predictors())
+
+nb_model <- naive_Bayes(Laplace = tune(),
+                        smoothness = tune()) %>%
+  set_mode("classification") %>%
+  set_engine("naivebayes")
+
+amazon_workflow <- workflow() %>%
+  add_recipe(amazon_recipe) %>%
+  add_model(nb_model)
+
+
+
+tuning_grid <- grid_regular(Laplace(),
+                            smoothness(),
+                            levels = 2) # L^2 total tuning possibilities 
+
+folds <- vfold_cv(train_amazon, v = 2, repeats = 1)
+
+CV_results <- amazon_workflow %>%
+  tune_grid(resamples = folds,
+            grid = tuning_grid,
+            metrics = metric_set(roc_auc))
+# roc_auc, f_meas, sens, recall, spec, precision, accuracy
+
+bestTune <- CV_results %>% select_best(metric = "roc_auc")
+
+final_wf <- amazon_workflow %>%
+  finalize_workflow(bestTune) %>%
+  fit(data = train_amazon)
+
+amazon_predictions <- final_wf %>%
+  predict(new_data = test_amazon, type = "prob") %>%
+  bind_cols(test_amazon %>% select(id)) %>%
+  select(id, .pred_1) %>%
+  rename(action = .pred_1)
+
+vroom_write(amazon_predictions, "naive_bayes_predictions.csv", delim = ',') 
 
